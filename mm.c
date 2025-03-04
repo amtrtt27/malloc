@@ -16,7 +16,7 @@
  *
  *************************************************************************
  *
- * @author Your Name <andrewid@andrew.cmu.edu>
+ * @author Tram Tran <tntran@andrew.cmu.edu>
  */
 
 #include <assert.h>
