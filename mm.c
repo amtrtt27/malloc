@@ -158,6 +158,18 @@ static block_t* find_neaxt(block_t* block);
 static word_t* find_prev_footer(block_t* block);
 static block_t* find_prev(block_t* block);
 
+static block_t* coalesce_block(block_t* block);
+static block_t* extend_heap(size_t size);
+static void split_block(block_t* block, size_t asize);
+static block_t* find_fit(size_t asize);
+
+bool mm_checkheap(int line);
+bool mm_init(void);
+
+void* malloc(size_t size);
+void* realloc(void* ptr, size_t size);
+void* calloc(size_t elements, size_t size);
+void free(void* bp);
 
 
 /*
