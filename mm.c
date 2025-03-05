@@ -139,6 +139,24 @@ static block_t *heap_start = NULL;
 static size_t max(size_t, size_t y);
 static size_t round_up(size_t size, size_t n);
 
+static word_t pack(size_t size, bool alloc);
+static size_t extract_size(word_t word);
+static size_t get_size(block_t* block);
+
+static block_t* payload_to_header(void* bp);
+static void* header_to_payload(block_t* block);
+static word_t* header_to_footer(block_t* block);
+static block_t* footer_to_header(word_t* footer);
+static size_t get_payload_size(block_t* block);
+
+static bool extrac_alloc(word_t word);
+static bool get_alloc(block_t* block);
+static void write_epilogue(block_t* block);
+static void write_block(block_t* block, size_t size, bool alloc);
+
+static block_t* find_neaxt(block_t* block);
+static word_t* find_prev_footer(block_t* block);
+static block_t* find_prev(block_t* block);
 
 
 
