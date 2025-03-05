@@ -95,7 +95,8 @@ static const size_t dsize = 2 * wsize;
 static const size_t min_block_size = 2 * dsize;
 
 /**
- * TODO: explain what chunksize is
+ * @brief Memory that the allocator requests from the system when it needs to 
+ *        expand the heap
  * (Must be divisible by dsize)
  */
 static const size_t chunksize = (1 << 12);
