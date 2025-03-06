@@ -177,6 +177,9 @@ void* realloc(void* ptr, size_t size);
 void* calloc(size_t elements, size_t size);
 void free(void* bp);
 
+static void add_node(block_t* block);
+static void delete_node(block_t* block);
+
 
 /*
  *****************************************************************************
@@ -452,7 +455,25 @@ static void add_node(block_t* block) {
     }
 }
 
+static void delete_node(block_t* block) {
 
+    /* Case 1: deleted node is not the first block */
+    if (block->prev != NULL) {
+        block->prev->next = block->next;
+    }
+
+    /* Case 2: deleted node is the first block */
+    else {
+        if (block != NULL) ll_start = block->next;
+        else ll_start = NULL;
+    }
+    /* Case 3: deleted block is not the last node */
+    if (block->next != NULL) {
+        block->next->prev = block->prev;
+    }
+    block->next = NULL:
+    block->prev = NULL;
+}
 /*
  * ---------------------------------------------------------------------------
  *                        END SHORT HELPER FUNCTIONS
@@ -473,25 +494,11 @@ static void add_node(block_t* block) {
  * @return
  */
 static block_t *coalesce_block(block_t *block) {
-    /*
-     * TODO: delete or replace this comment once you're done.
-     *
-     * Before you start, it will be helpful to review the "Dynamic Memory
-     * Allocation: Basic" lecture, and especially the four coalescing
-     * cases that are described.
-     *
-     * The actual content of the function will probably involve a call to
-     * find_prev(), and multiple calls to write_block(). For examples of how
-     * to use write_block(), take a look at split_block().
-     *
-     * Please do not reference code from prior semesters for this, including
-     * old versions of the 213 website. We also discourage you from looking
-     * at the malloc code in CS:APP and K&R, which make heavy use of macros
-     * and which we no longer consider to be good style.
-     */
-    
+
     block_t* block_prev = find_prev(block);
-    block_t* block_next = finx_next(block);
+    block_t* block_next = find_next(block);
+
+    size_t size = get_size(block);
 
     bool prev_alloc = get_alloc(block_prev);
     bool next_alloc = get_alloc(block_next);
@@ -499,10 +506,41 @@ static block_t *coalesce_block(block_t *block) {
     /* Case 1: prev and next are allocated */
     if (prev_alloc && next_alloc) {
         add_node(block);
+        return block;
     }
+
     /* Case 2: prev allocated and next free */
+    else if (prev_alloc && !next_alloc) {
+        size += get_size(block_next);
+        delete_node(block_next);
+        write_block(block, size, false);
+        add_node(block);
+        block_next = find_next(block);
+        return block;
+    }
+
     /* Case 3: prev free and next allocated */
+    else if (!prev_alloc && next_alloc) {
+        size += get_size(block_prev);
+        prev_alloc = get_prev_alloc(block_prev);
+        delete_node(block_prev);
+        write_block(block_prev, size, false);
+        add_node(block_prev);
+        return block_prev;
+    }
+
     /* Case 4: prev and next are free */
+    else {
+        size += get_size(block_prev) + get_size(block_next);
+        delete_node(block_prev);
+        delete_node(block_next);
+
+        write_block(block_prev, size, false);
+        block = block_prev;
+        add_node(block);
+        block_next = find_next(block);
+        return block;
+    }
 }
 
 /**
