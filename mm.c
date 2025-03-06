@@ -149,12 +149,12 @@ static word_t* header_to_footer(block_t* block);
 static block_t* footer_to_header(word_t* footer);
 static size_t get_payload_size(block_t* block);
 
-static bool extrac_alloc(word_t word);
+static bool extract_alloc(word_t word);
 static bool get_alloc(block_t* block);
 static void write_epilogue(block_t* block);
 static void write_block(block_t* block, size_t size, bool alloc);
 
-static block_t* find_neaxt(block_t* block);
+static block_t* find_next(block_t* block);
 static word_t* find_prev_footer(block_t* block);
 static block_t* find_prev(block_t* block);
 
@@ -461,7 +461,17 @@ static block_t *coalesce_block(block_t *block) {
      * at the malloc code in CS:APP and K&R, which make heavy use of macros
      * and which we no longer consider to be good style.
      */
-    return block;
+    
+    block_t* block_prev = find_prev(block);
+    block_t* block_next = finx_next(block);
+
+    bool prev_alloc = get_alloc(block_prev);
+    bool next_alloc = get_alloc(block_next);
+
+    /* Case 1: prev and next are allocated */
+    /* Case 2: prev allocated and next free */
+    /* Case 3: prev free and next allocated */
+    /* Case 4: prev and next are free */
 }
 
 /**
