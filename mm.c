@@ -131,6 +131,12 @@ typedef struct block {
 /** @brief Pointer to first block in the heap */
 static block_t *heap_start = NULL;
 
+/** @brief Pointer to the first free block in the heap */
+static block_t* ll_start = NULL;
+
+/** @brief Pointer to the last free block in the heap */
+static block_t* ll_end = NULL;=
+
 
 /*
  **************** FUNCTION LISTS ****************
@@ -425,6 +431,28 @@ static block_t *find_prev(block_t *block) {
     return footer_to_header(footerp);
 }
 
+/**
+ * @brief Insert a new node to a doubled linked list using LIFO
+ */
+static void add_node(block_t* block) {
+
+    /* Case 1: free list is empty */
+    if (ll_start == NULL) {
+        block = ll_start;
+        block->prev = NULL;
+        block->next = NULL;
+    }
+
+    /* Case 2: free list is non-empty */
+    else {
+        block->prev = NULL;
+        block->next = ll_start;
+        ll_start->prev = block;
+        ll_start = block;
+    }
+}
+
+
 /*
  * ---------------------------------------------------------------------------
  *                        END SHORT HELPER FUNCTIONS
@@ -469,6 +497,9 @@ static block_t *coalesce_block(block_t *block) {
     bool next_alloc = get_alloc(block_next);
 
     /* Case 1: prev and next are allocated */
+    if (prev_alloc && next_alloc) {
+        add_node(block);
+    }
     /* Case 2: prev allocated and next free */
     /* Case 3: prev free and next allocated */
     /* Case 4: prev and next are free */
