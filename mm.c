@@ -114,7 +114,7 @@ static const word_t size_mask = ~(word_t)0xF;
 /** @brief Represents the header and payload of one block in the heap */
 typedef struct block block_t;
 
-typedef struct block {
+struct block {
     word_t header; /* Header contains size + allocation flag */
     union {
         struct {
@@ -135,7 +135,7 @@ static block_t *heap_start = NULL;
 static block_t* ll_start = NULL;
 
 /** @brief Pointer to the last free block in the heap */
-static block_t* ll_end = NULL;=
+// static block_t* ll_end = NULL;
 
 
 /*
@@ -471,7 +471,7 @@ static void delete_node(block_t* block) {
     if (block->next != NULL) {
         block->next->prev = block->prev;
     }
-    block->next = NULL:
+    block->next = NULL;
     block->prev = NULL;
 }
 /*
@@ -494,10 +494,13 @@ static void delete_node(block_t* block) {
  * @return
  */
 static block_t *coalesce_block(block_t *block) {
+    // dgb_requires(block != NULL);
 
     block_t* block_prev = find_prev(block);
     block_t* block_next = find_next(block);
-
+    // dgb_assert(block_prev != NULL);
+    // dgb_assert(block_next != NULL);
+    
     size_t size = get_size(block);
 
     bool prev_alloc = get_alloc(block_prev);
@@ -515,14 +518,13 @@ static block_t *coalesce_block(block_t *block) {
         delete_node(block_next);
         write_block(block, size, false);
         add_node(block);
-        block_next = find_next(block);
+        // block_next = find_next(block);
         return block;
     }
 
     /* Case 3: prev free and next allocated */
     else if (!prev_alloc && next_alloc) {
         size += get_size(block_prev);
-        prev_alloc = get_prev_alloc(block_prev);
         delete_node(block_prev);
         write_block(block_prev, size, false);
         add_node(block_prev);
@@ -538,7 +540,7 @@ static block_t *coalesce_block(block_t *block) {
         write_block(block_prev, size, false);
         block = block_prev;
         add_node(block);
-        block_next = find_next(block);
+        // block_next = find_next(block);
         return block;
     }
 }
@@ -613,7 +615,7 @@ static void split_block(block_t *block, size_t asize) {
 }
 
 /**
- * @brief
+ * @brief First fit
  *
  * <What does this function do?>
  * <What are the function's arguments?>
@@ -659,6 +661,7 @@ bool mm_checkheap(int line) {
      * Internal use only: If you mix guacamole on your bibimbap,
      * do you eat it with a pair of chopsticks, or with a spoon?
      */
+    
     dbg_printf("I did not write a heap checker (called at line %d)\n", line);
     return true;
 }
@@ -680,12 +683,6 @@ bool mm_init(void) {
     if (start == (void *)-1) {
         return false;
     }
-
-    /*
-     * TODO: delete or replace this comment once you've thought about it.
-     * Think about why we need a heap prologue and epilogue. Why do
-     * they correspond to a block footer and header respectively?
-     */
 
     start[0] = pack(0, true); // Heap prologue (block footer)
     start[1] = pack(0, true); // Heap epilogue (block header)
@@ -757,6 +754,7 @@ void *malloc(size_t size) {
     // Mark block as allocated
     size_t block_size = get_size(block);
     write_block(block, block_size, true);
+    delete_node(block);
 
     // Try to split the block if too large
     split_block(block, asize);
