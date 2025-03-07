@@ -462,12 +462,12 @@ static void delete_node(block_t* block) {
         block->prev->next = block->next;
     }
 
-    /* Case 2: deleted node is the first block */
     else {
         if (block != NULL) ll_start = block->next;
         else ll_start = NULL;
     }
-    /* Case 3: deleted block is not the last node */
+    
+    /* deleted block is not the last node */
     if (block->next != NULL) {
         block->next->prev = block->prev;
     }
