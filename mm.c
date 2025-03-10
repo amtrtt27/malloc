@@ -442,8 +442,8 @@ static void add_node(block_t* block) {
     /* Case 1: free list is empty */
     if (ll_start == NULL) {
         block = ll_start;
-        block->prev = NULL;
-        block->next = NULL;
+        // block->prev = NULL;
+        // block->next = NULL;
     }
 
     /* Case 2: free list is non-empty */
@@ -466,7 +466,7 @@ static void delete_node(block_t* block) {
         if (block != NULL) ll_start = block->next;
         else ll_start = NULL;
     }
-    
+
     /* deleted block is not the last node */
     if (block->next != NULL) {
         block->next->prev = block->prev;
