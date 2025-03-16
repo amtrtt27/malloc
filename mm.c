@@ -456,7 +456,7 @@ static void init_seg_list() {
 }
 
 static size_t get_seg_index(size_t size) {
-    size_t idx = 0
+    size_t idx = 0;
     size >>= 5;
 
     while (size > 1 && idx < SEG_LENGTH - 1) {
@@ -540,12 +540,13 @@ static void delete_node(block_t* block) {
  * @return
  */
 static block_t *coalesce_block(block_t *block) {
-    // dgb_requires(block != NULL);
+    dbg_requires(block != NULL);
+    dbg_requires(in_heap(block));
 
     block_t* block_prev = find_prev(block);
     block_t* block_next = find_next(block);
-    // dgb_assert(block_prev != NULL);
-    // dgb_assert(block_next != NULL);
+    dgb_assert(block_prev != NULL);
+    dgb_assert(block_next != NULL);
     
     size_t size = get_size(block);
 
@@ -666,13 +667,176 @@ static block_t *find_fit(size_t asize) {
     block_t *block;
     block_t* ll_start;
 
-    for (block = class_idx; i < SEG_LENGTH; i++) {
+    for (size_t i = class_idx; i < SEG_LENGTH; i++) {
         ll_start = seg_list[i];
         for (block = ll_start; block != NULL; block = block->next) {
             if (asize <= get_size(block)) return block;
         }
     }
     return NULL; // no fit found
+}
+
+
+static bool is_acyclic(block_t *block) {
+    block_t *h;
+    block_t *t;
+
+    if (block == NULL)
+        return true;
+    h = block->next;
+    t = block;
+    while (h != t) {
+        if (h == NULL || h->next == NULL)
+            return false;
+        h = h->next->next; /* h moves faster than t */
+        t = t->next;
+    }
+    return true;
+}
+/**
+ */
+static bool is_aligned(const void *p) {
+    size_t ip = (size_t)p;
+
+    // Round up to the nearest multiple of ALIGNMENT
+    size_t aligned_value =
+        min_block_size * ((ip + min_block_size - 1) / min_block_size);
+
+    // Check if already aligned
+    return aligned_value == ip ? ip : aligned_value;
+}
+
+/**
+ * @brief Check the validity at block level
+ * - Header and footer must match (for free blocks)
+ * - Payload is aligned
+ * - Valid size
+ */
+static bool is_valid_block(block_t *block) {
+    word_t *footerp = (word_t *)((block->payload) + get_size(block) - dsize);
+
+    /* Check payload alignment */
+    if (!is_aligned(block->payload))
+        return false;
+
+    /* Check valid size */
+    if (get_size(block) < min_block_size)
+        return false;
+    else if (get_size(block) >= min_block_size && !get_alloc(block)) {
+        /* Header and footer matching */
+        if (extract_size(*footerp) != get_size(block))
+            return false;
+        if (extract_alloc(*footerp) != get_alloc(block))
+            return false;
+    }
+    return true;
+}
+
+/**
+ * @brief Check validity of list segment
+ */
+static bool is_segment(block_t *start, block_t *end, size_t size) {
+    if (start == NULL || start == end)
+        return true;
+    if (!is_valid_block(start) || get_size(start) > size) {
+        dbg_printf("Error: segment error at line \n");
+        return false;
+    }
+
+    /* Previous/Next consistency */
+    if (size < min_block_size)
+        return false;
+    else {
+        if (start->next != NULL && start->next->prev != start) {
+            dbg_printf("Error: next consistency error at line\n");
+            return false;
+        }
+
+        if (start->prev != NULL && start->prev->next != start) {
+            dbg_printf("Error: previous consistency error at line\n");
+            return false;
+        }
+    }
+    return is_segment(start->next, NULL, size);
+}
+
+/**
+ * @brief Check the validity at list level:
+ * - Free list contains no allocated blocks
+ * - No cycles in the list
+ * - Previous/Next pointer consistency
+ * - Correct size
+ */
+static bool is_valid_list(block_t *block, size_t size) {
+    if (block == NULL)
+        return true;
+    if (!is_segment(block, NULL, size)) {
+        dbg_printf("Error: invalid list 1 error at line\n");
+        return false;
+    }
+
+    if (!is_acyclic(block)) {
+        dbg_printf("Error: acyclic error at line\n");
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @brief Check the validity of segregated list
+ */
+static bool is_valid_segregated_list() {
+    size_t size;
+
+    for (int i = 0; i < SEG_LENGTH; i++) {
+        size = get_seg_size((unsigned int)i);
+
+        if (i == SEG_LENGTH - 1) {
+            size = UINT_MAX;
+        }
+
+        if (!is_valid_list(seg_list[i], size)) {
+            dbg_printf("Error: invalid list error at line\n");
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * @brief Check whether the pointer is in the heap or not
+ */
+static bool in_heap(const void *p) {
+    return p <= mem_heap_hi() && p >= mem_heap_lo();
+}
+
+/**
+ * @brief Check the validity of heap epilogue and prologue
+ */
+static bool is_valid_heap_bound(int line) {
+    block_t *base = (block_t *)mem_heap_lo();
+    block_t *top = (block_t *)((char *)mem_heap_hi() - 7); //?????????
+
+    /* Check prologue */
+    if (!get_alloc(base) || get_size(base) != 0) {
+        dbg_printf("Error: prologue error at line %d\n", line);
+        return false;
+    }
+
+    /* Check heap starts */
+    if ((char *)heap_start != (char *)(base) + 8) {
+        dbg_printf("Error: heap start error at line %d\n", line);
+        return false;
+    }
+
+    /* Check epilogue */
+    if (!get_alloc(top) || get_size(top) != 0) {
+        dbg_printf("Error: epilogue error at line %d\n", line);
+        return false;
+    }
+
+    return true;
 }
 
 /**
@@ -687,20 +851,34 @@ static block_t *find_fit(size_t asize) {
  * @return
  */
 bool mm_checkheap(int line) {
-    /*
-     * TODO: Delete this comment!
-     *
-     * You will need to write the heap checker yourself.
-     * Please keep modularity in mind when you're writing the heap checker!
-     *
-     * As a filler: one guacamole is equal to 6.02214086 x 10**23 guacas.
-     * One might even call it...  the avocado's number.
-     *
-     * Internal use only: If you mix guacamole on your bibimbap,
-     * do you eat it with a pair of chopsticks, or with a spoon?
-     */
-    
-    dbg_printf("I did not write a heap checker (called at line %d)\n", line);
+    block_t* curr = heap_start;
+    block_t* prev;
+
+    if (!is_valid_segregated_list()) {
+        dbg_printf("Error: invalid segreaged list at line %d\n", line);
+        return false;
+    }
+
+    if (!is_valid_heap_bound(line)) {
+        dbg_printf("Error: invalid heap bound at line %d\n", line);
+        return false;
+    }
+
+    while (get_size(curr) != 0) {
+        if (!in_heap(curr)) {
+            dbg_printf("Error: Block is not in heap bound at line %d\n", line);
+            return false;
+        }
+
+        prev = curr;
+        curr = find_next(curr);
+
+        if (!get_alloc(prev) && !get_alloc(curr) && get_size(curr) != 0) {
+            dbg_printf("Error: free block error at line %d\n", line);
+            return false;
+        }
+    }
+    dbg_printf("Heap is consistent at line %d\n", line);
     return true;
 }
 
@@ -727,6 +905,9 @@ bool mm_init(void) {
 
     // Heap starts with first "block header", currently the epilogue
     heap_start = (block_t *)&(start[1]);
+
+    // Initialize free seg block list
+    init_seg_list(); 
 
     // Extend the empty heap with a free block of chunksize bytes
     if (extend_heap(chunksize) == NULL) {
