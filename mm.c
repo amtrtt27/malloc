@@ -129,16 +129,9 @@ struct block {
     
 
 /* Global variables */
-
+static block_t *seg_list[SEG_LENGTH];
 /** @brief Pointer to first block in the heap */
 static block_t *heap_start = NULL;
-
-/** @brief Pointer to the first free block in the heap */
-static block_t* ll_start = NULL;
-
-/** @brief Pointer to the last free block in the heap */
-// static block_t* ll_end = NULL;
-
 
 /*
  **************** FUNCTION LISTS ****************
@@ -388,6 +381,15 @@ static void write_block(block_t *block, size_t size, bool alloc) {
     *footerp = pack(size, alloc);
 }
 
+
+/**
+ */
+static void write_footer(block_t* block, size_t size, bool alloc) {
+    word_t* footerp = header_to_footer(block);
+    *footerp = pack(size, alloc);
+}
+
+
 /**
  * @brief Finds the next consecutive block on the heap.
  *
@@ -436,6 +438,15 @@ static block_t *find_prev(block_t *block) {
     return footer_to_header(footerp);
 }
 
+/**
+ */
+static bool extract_prev_alloc(word_t word) {
+    return (bool)(word & 0x2);
+}
+
+static bool get_prev_alloc(block_t* block) {
+    return extract_prev_alloc(block->header);
+}
 /**
  * @brief Insert a new node to a doubled linked list using LIFO
  */
