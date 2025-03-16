@@ -664,11 +664,12 @@ static void split_block(block_t *block, size_t asize) {
 static block_t *find_fit(size_t asize) {
     size_t class_idx = get_seg_index(asize);
     block_t *block;
+    block_t* ll_start;
 
-    for (block = heap_start; get_size(block) > 0; block = find_next(block)) {
-
-        if (!(get_alloc(block)) && (asize <= get_size(block))) {
-            return block;
+    for (block = class_idx; i < SEG_LENGTH; i++) {
+        ll_start = seg_list[i];
+        for (block = ll_start; block != NULL; block = block->next) {
+            if (asize <= get_size(block)) return block;
         }
     }
     return NULL; // no fit found
