@@ -82,7 +82,9 @@
 #endif
 
 /* Basic constants */
-
+#define SEG_LENGTH 15
+#define UINT_MAX ((size_t)-1)
+#define ALIGNMENT 16
 typedef uint64_t word_t;
 
 /** @brief Word and header size (bytes) */
