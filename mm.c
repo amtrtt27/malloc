@@ -447,28 +447,60 @@ static bool extract_prev_alloc(word_t word) {
 static bool get_prev_alloc(block_t* block) {
     return extract_prev_alloc(block->header);
 }
+
+
+static void init_seg_list() {
+    for (int i = 0; i < SEG_LENGTH; i++) {
+        seg_list[i] = NULL;
+    }
+}
+
+static size_t get_seg_index(size_t size) {
+    size_t idx = 0
+    size >>= 5;
+
+    while (size > 1 && idx < SEG_LENGTH - 1) {
+        size >>= 1;
+        idx++;
+    }
+    return idx;
+}
+
+/**
+ */
+static size_t get_seg_size(size_t idx) {
+    if (idx == 0) return min_block_size;
+    return 1 << (idx + 5);
+}
+
+
 /**
  * @brief Insert a new node to a doubled linked list using LIFO
  */
 static void add_node(block_t* block) {
 
+    size_t size = get_size(block);
+    size_t idx = get_seg_index(size);
+
     /* Case 1: free list is empty */
-    if (ll_start == NULL) {
-        block = ll_start;
-        // block->prev = NULL;
-        // block->next = NULL;
+    if (seg_list[idx] == NULL) {
+        seg_list[idx] = block;
+        block->prev = NULL;
+        block->next = NULL;
     }
 
     /* Case 2: free list is non-empty */
     else {
         block->prev = NULL;
-        block->next = ll_start;
-        ll_start->prev = block;
-        ll_start = block;
+        block->next = seg_list[idx];
+        seg_list[idx]->prev = block;
+        seg_list[idx] = block;
     }
+    return;
 }
 
 static void delete_node(block_t* block) {
+    size_t idx = get_seg_index(get_size(block));
 
     /* Case 1: deleted node is not the first block */
     if (block->prev != NULL) {
@@ -476,8 +508,8 @@ static void delete_node(block_t* block) {
     }
 
     else {
-        if (block != NULL) ll_start = block->next;
-        else ll_start = NULL;
+        if (block != NULL) seg_list[idx] = block->next;
+        else seg_list[idx] = NULL;
     }
 
     /* deleted block is not the last node */
@@ -487,6 +519,7 @@ static void delete_node(block_t* block) {
     block->next = NULL;
     block->prev = NULL;
 }
+
 /*
  * ---------------------------------------------------------------------------
  *                        END SHORT HELPER FUNCTIONS
@@ -531,7 +564,6 @@ static block_t *coalesce_block(block_t *block) {
         delete_node(block_next);
         write_block(block, size, false);
         add_node(block);
-        // block_next = find_next(block);
         return block;
     }
 
@@ -551,10 +583,8 @@ static block_t *coalesce_block(block_t *block) {
         delete_node(block_next);
 
         write_block(block_prev, size, false);
-        block = block_prev;
         add_node(block);
-        // block_next = find_next(block);
-        return block;
+        return block_prev;
     }
 }
 
@@ -577,13 +607,6 @@ static block_t *extend_heap(size_t size) {
     if ((bp = mem_sbrk((intptr_t)size)) == (void *)-1) {
         return NULL;
     }
-
-    /*
-     * TODO: delete or replace this comment once you've thought about it.
-     * Think about what bp represents. Why do we write the new block
-     * starting one word BEFORE bp, but with the same size that we
-     * originally requested?
-     */
 
     // Initialize free block header/footer
     block_t *block = payload_to_header(bp);
@@ -612,7 +635,6 @@ static block_t *extend_heap(size_t size) {
  */
 static void split_block(block_t *block, size_t asize) {
     dbg_requires(get_alloc(block));
-    /* TODO: Can you write a precondition about the value of asize? */
 
     size_t block_size = get_size(block);
 
@@ -622,6 +644,7 @@ static void split_block(block_t *block, size_t asize) {
 
         block_next = find_next(block);
         write_block(block_next, block_size - asize, false);
+        add_node(block_next);
     }
 
     dbg_ensures(get_alloc(block));
@@ -639,6 +662,7 @@ static void split_block(block_t *block, size_t asize) {
  * @return
  */
 static block_t *find_fit(size_t asize) {
+    size_t class_idx = get_seg_index(asize);
     block_t *block;
 
     for (block = heap_start; get_size(block) > 0; block = find_next(block)) {
