@@ -44,7 +44,7 @@
 #endif /* def DRIVER */
 
 /* You can change anything from here onward */
- 
+
 /*
 *****************************************************************************
 * If DEBUG is defined (such as when running mdriver-dbg), these macros      *
@@ -64,15 +64,15 @@
 #define dbg_printheap(...) print_heap(__VA_ARGS__)
 #else
 /* When DEBUG is not defined, these should emit no code whatsoever,
-* not even from evaluation of argument expressions.  However,
-* argument expressions should still be syntax-checked and should
-* count as uses of any variables involved.  This used to use a
-* straightforward hack involving sizeof(), but that can sometimes
-* provoke warnings about misuse of sizeof().  I _hope_ that this
-* newer, less straightforward hack will be more robust.
-* Hat tip to Stack Overflow poster chqrlie (see
-* https://stackoverflow.com/questions/72647780).
-*/
+ * not even from evaluation of argument expressions.  However,
+ * argument expressions should still be syntax-checked and should
+ * count as uses of any variables involved.  This used to use a
+ * straightforward hack involving sizeof(), but that can sometimes
+ * provoke warnings about misuse of sizeof().  I _hope_ that this
+ * newer, less straightforward hack will be more robust.
+ * Hat tip to Stack Overflow poster chqrlie (see
+ * https://stackoverflow.com/questions/72647780).
+ */
 #define dbg_discard_expr_(...) ((void)((0) && printf(__VA_ARGS__)))
 #define dbg_requires(expr) dbg_discard_expr_("%d", !(expr))
 #define dbg_assert(expr) dbg_discard_expr_("%d", !(expr))
@@ -89,7 +89,7 @@ typedef uint64_t word_t;
 
 /** @brief Word and header size (bytes) */
 static const size_t wsize = sizeof(word_t);
- 
+
 /** @brief Double word size (bytes) */
 static const size_t dsize = 2 * wsize;
 
@@ -97,7 +97,7 @@ static const size_t dsize = 2 * wsize;
 static const size_t min_block_size = 2 * dsize;
 
 /**
- * @brief Memory that the allocator requests from the system when it needs to 
+ * @brief Memory that the allocator requests from the system when it needs to
  *        expand the heap
  * (Must be divisible by dsize)
  */
@@ -120,8 +120,8 @@ struct block {
     word_t header; /* Header contains size + allocation flag */
     union {
         struct {
-            block_t* prev;
-            block_t* next;
+            block_t *prev;
+            block_t *next;
         };
         char payload[0]; /* A pointer to the block payload */
     };
@@ -146,7 +146,6 @@ static block_t *coalesce_block(block_t *block);
 static block_t *find_fit(size_t asize);
 static void split_block(block_t *block, size_t asize);
 
-
 static size_t max(size_t x, size_t y);
 static size_t round_up(size_t size, size_t n);
 static word_t pack(size_t size, bool alloc);
@@ -168,7 +167,6 @@ static block_t *find_next(block_t *block);
 static word_t *find_prev_footer(block_t *block);
 static block_t *find_prev(block_t *block);
 
-
 static void add_node(block_t *block);
 static void delete_node(block_t *block);
 static size_t get_seg_index(size_t size);
@@ -189,43 +187,43 @@ static size_t get_seg_size(size_t size);
 */
 
 /*
-* ---------------------------------------------------------------------------
-*                        BEGIN SHORT HELPER FUNCTIONS
-* ---------------------------------------------------------------------------
-*/
+ * ---------------------------------------------------------------------------
+ *                        BEGIN SHORT HELPER FUNCTIONS
+ * ---------------------------------------------------------------------------
+ */
 
 /**
-* @brief Returns the maximum of two integers.
-* @param[in] x
-* @param[in] y
-* @return `x` if `x > y`, and `y` otherwise.
-*/
+ * @brief Returns the maximum of two integers.
+ * @param[in] x
+ * @param[in] y
+ * @return `x` if `x > y`, and `y` otherwise.
+ */
 static size_t max(size_t x, size_t y) {
     return (x > y) ? x : y;
 }
 
 /**
-* @brief Rounds `size` up to next multiple of n
-* @param[in] size
-* @param[in] n
-* @return The size after rounding up
-*/
+ * @brief Rounds `size` up to next multiple of n
+ * @param[in] size
+ * @param[in] n
+ * @return The size after rounding up
+ */
 static size_t round_up(size_t size, size_t n) {
     return n * ((size + (n - 1)) / n);
 }
 
 /**
-* @brief Packs the `size` and `alloc` of a block into a word suitable for
-*        use as a packed value.
-*
-* Packed values are used for both headers and footers.
-*
-* The allocation status is packed into the lowest bit of the word.
-*
-* @param[in] size The size of the block being represented
-* @param[in] alloc True if the block is allocated
-* @return The packed value
-*/
+ * @brief Packs the `size` and `alloc` of a block into a word suitable for
+ *        use as a packed value.
+ *
+ * Packed values are used for both headers and footers.
+ *
+ * The allocation status is packed into the lowest bit of the word.
+ *
+ * @param[in] size The size of the block being represented
+ * @param[in] alloc True if the block is allocated
+ * @return The packed value
+ */
 static word_t pack(size_t size, bool alloc) {
     word_t word = size;
     if (alloc) {
@@ -235,74 +233,74 @@ static word_t pack(size_t size, bool alloc) {
 }
 
 /**
-* @brief Extracts the size represented in a packed word.
-*
-* This function simply clears the lowest 4 bits of the word, as the heap
-* is 16-byte aligned.
-*
-* @param[in] word
-* @return The size of the block represented by the word
-*/
+ * @brief Extracts the size represented in a packed word.
+ *
+ * This function simply clears the lowest 4 bits of the word, as the heap
+ * is 16-byte aligned.
+ *
+ * @param[in] word
+ * @return The size of the block represented by the word
+ */
 static size_t extract_size(word_t word) {
     return (word & size_mask);
 }
 
 /**
-* @brief Extracts the size of a block from its header.
-* @param[in] block
-* @return The size of the block
-*/
+ * @brief Extracts the size of a block from its header.
+ * @param[in] block
+ * @return The size of the block
+ */
 static size_t get_size(block_t *block) {
     return extract_size(block->header);
 }
 
 /**
-* @brief Given a payload pointer, returns a pointer to the corresponding
-*        block.
-* @param[in] bp A pointer to a block's payload
-* @return The corresponding block
-*/
+ * @brief Given a payload pointer, returns a pointer to the corresponding
+ *        block.
+ * @param[in] bp A pointer to a block's payload
+ * @return The corresponding block
+ */
 static block_t *payload_to_header(void *bp) {
     return (block_t *)((char *)bp - offsetof(block_t, payload));
 }
 
 /**
-* @brief Given a block pointer, returns a pointer to the corresponding
-*        payload.
-* @param[in] block
-* @return A pointer to the block's payload
-* @pre The block must be a valid block, not a boundary tag.
-*/
+ * @brief Given a block pointer, returns a pointer to the corresponding
+ *        payload.
+ * @param[in] block
+ * @return A pointer to the block's payload
+ * @pre The block must be a valid block, not a boundary tag.
+ */
 static void *header_to_payload(block_t *block) {
     dbg_requires(get_size(block) != 0);
     return (void *)(block->payload);
 }
 
 /**
-* @brief Given a block pointer, returns a pointer to the corresponding
-*        footer.
-* @param[in] block
-* @return A pointer to the block's footer
-* @pre The block must be a valid block, not a boundary tag.
-*/
+ * @brief Given a block pointer, returns a pointer to the corresponding
+ *        footer.
+ * @param[in] block
+ * @return A pointer to the block's footer
+ * @pre The block must be a valid block, not a boundary tag.
+ */
 static word_t *header_to_footer(block_t *block) {
     dbg_requires(get_size(block) != 0 &&
-                "Called header_to_footer on the epilogue block");
+                 "Called header_to_footer on the epilogue block");
     return (word_t *)(block->payload + get_size(block) - dsize);
 }
 
 /**
-* @brief Given a block footer, returns a pointer to the corresponding
-*        header.
-*
-* The header is found by subtracting the block size from
-* the footer and adding back wsize.
-*
-* If the prologue is given, then the footer is return as the block.
-*
-* @param[in] footer A pointer to the block's footer
-* @return A pointer to the start of the block
-*/
+ * @brief Given a block footer, returns a pointer to the corresponding
+ *        header.
+ *
+ * The header is found by subtracting the block size from
+ * the footer and adding back wsize.
+ *
+ * If the prologue is given, then the footer is return as the block.
+ *
+ * @param[in] footer A pointer to the block's footer
+ * @return A pointer to the start of the block
+ */
 static block_t *footer_to_header(word_t *footer) {
     size_t size = extract_size(*footer);
     if (size == 0) {
@@ -312,47 +310,47 @@ static block_t *footer_to_header(word_t *footer) {
 }
 
 /**
-* @brief Returns the payload size of a given block.
-*
-* The payload size is equal to the entire block size minus the sizes of the
-* block's header and footer.
-*
-* @param[in] block
-* @return The size of the block's payload
-*/
+ * @brief Returns the payload size of a given block.
+ *
+ * The payload size is equal to the entire block size minus the sizes of the
+ * block's header and footer.
+ *
+ * @param[in] block
+ * @return The size of the block's payload
+ */
 static size_t get_payload_size(block_t *block) {
     size_t asize = get_size(block);
     return asize - dsize;
 }
 
 /**
-* @brief Returns the allocation status of a given header value.
-*
-* This is based on the lowest bit of the header value.
-*
-* @param[in] word
-* @return The allocation status correpsonding to the word
-*/
+ * @brief Returns the allocation status of a given header value.
+ *
+ * This is based on the lowest bit of the header value.
+ *
+ * @param[in] word
+ * @return The allocation status correpsonding to the word
+ */
 static bool extract_alloc(word_t word) {
     return (bool)(word & alloc_mask);
 }
 
 /**
-* @brief Returns the allocation status of a block, based on its header.
-* @param[in] block
-* @return The allocation status of the block
-*/
+ * @brief Returns the allocation status of a block, based on its header.
+ * @param[in] block
+ * @return The allocation status of the block
+ */
 static bool get_alloc(block_t *block) {
     return extract_alloc(block->header);
 }
 
 /**
-* @brief Writes an epilogue header at the given address.
-*
-* The epilogue header has size 0, and is marked as allocated.
-*
-* @param[out] block The location to write the epilogue header
-*/
+ * @brief Writes an epilogue header at the given address.
+ *
+ * The epilogue header has size 0, and is marked as allocated.
+ *
+ * @param[out] block The location to write the epilogue header
+ */
 static void write_epilogue(block_t *block) {
     dbg_requires(block != NULL);
     dbg_requires((char *)block == (char *)mem_heap_hi() - 7);
@@ -360,17 +358,17 @@ static void write_epilogue(block_t *block) {
 }
 
 /**
-  * @brief Writes a block starting at the given address.
-  *
-  * This function writes both a header and footer, where the location of the
-  * footer is computed in relation to the header.
-  *
-  * TODO: Are there any preconditions or postconditions?
-  *
-  * @param[out] block The location to begin writing the block header
-  * @param[in] size The size of the new block
-  * @param[in] alloc The allocation status of the new block
-  */
+ * @brief Writes a block starting at the given address.
+ *
+ * This function writes both a header and footer, where the location of the
+ * footer is computed in relation to the header.
+ *
+ * TODO: Are there any preconditions or postconditions?
+ *
+ * @param[out] block The location to begin writing the block header
+ * @param[in] size The size of the new block
+ * @param[in] alloc The allocation status of the new block
+ */
 static void write_block(block_t *block, size_t size, bool alloc) {
     dbg_requires(block != NULL);
     dbg_requires(size > 0);
@@ -380,65 +378,66 @@ static void write_block(block_t *block, size_t size, bool alloc) {
     *footerp = pack(size, alloc);
 }
 
-
 /**
-* @brief Given a block, its size, and allocation status, write appropriate
-* value to the footer
-*/
+ * @brief Given a block, its size, and allocation status, write appropriate
+ * value to the footer
+ */
 static void write_footer(block_t *block, size_t size, bool alloc) {
     word_t *footerp = header_to_footer(block);
     *footerp = pack(size, alloc);
 }
 
 /**
-* @brief Finds the next consecutive block on the heap.
-*
-* This function accesses the next block in the "implicit list" of the heap
-* by adding the size of the block.
-*
-* @param[in] block A block in the heap
-* @return The next consecutive block on the heap
-* @pre The block is not the epilogue
-*/
+ * @brief Finds the next consecutive block on the heap.
+ *
+ * This function accesses the next block in the "implicit list" of the heap
+ * by adding the size of the block.
+ *
+ * @param[in] block A block in the heap
+ * @return The next consecutive block on the heap
+ * @pre The block is not the epilogue
+ */
 static block_t *find_next(block_t *block) {
     dbg_requires(block != NULL);
-    dbg_requires(get_size(block) != 0 || 
-                (bool)"Called find_next on the last block in the heap");
+    dbg_requires(get_size(block) != 0 ||
+                 (bool)"Called find_next on the last block in the heap");
     return (block_t *)((char *)block + get_size(block));
 }
 
 /**
-* @brief Finds the footer of the previous block on the heap.
-* @param[in] block A block in the heap
-* @return The location of the previous block's footer
-*/
+ * @brief Finds the footer of the previous block on the heap.
+ * @param[in] block A block in the heap
+ * @return The location of the previous block's footer
+ */
 static word_t *find_prev_footer(block_t *block) {
     // Compute previous footer position as one word before the header
     return &(block->header) - 1;
 }
 
 /**
-* @brief Finds the previous consecutive block on the heap.
-*
-* This is the previous block in the "implicit list" of the heap.
-*
-* The position of the previous block is found by reading the previous
-* block's footer to determine its size, then calculating the start of the
-* previous block based on its size.
-*
-* @param[in] block A block in the heap
-* @return The previous consecutive block in the heap.
-* @pre The block is not the prologue
-*/
+ * @brief Finds the previous consecutive block on the heap.
+ *
+ * This is the previous block in the "implicit list" of the heap.
+ *
+ * The position of the previous block is found by reading the previous
+ * block's footer to determine its size, then calculating the start of the
+ * previous block based on its size.
+ *
+ * @param[in] block A block in the heap
+ * @return The previous consecutive block in the heap.
+ * @pre The block is not the prologue
+ */
 static block_t *find_prev(block_t *block) {
     dbg_requires(block != NULL);
-    dbg_requires(get_size(block) != 0 || 
-                (bool)"Called find_prev on the first block in the heap");
+    dbg_requires(get_size(block) != 0 ||
+                 (bool)"Called find_prev on the first block in the heap");
     word_t *footerp = find_prev_footer(block);
     return footer_to_header(footerp);
 }
 
-/**/
+/**
+ * @brief 
+ */
 static bool extract_prev_alloc(word_t word) {
     return (bool)(word & 0x2);
 }
@@ -448,13 +447,21 @@ static bool get_prev_alloc(block_t *block) {
     return extract_prev_alloc(block->header);
 }
 
-/**/
+/**
+ * @brief Initiliaze the segregated list
+ */
 static void init_seg_list() {
     for (int i = 0; i < SEG_LENGTH; i++) {
         seg_list[i] = NULL;
     }
 }
 
+/**
+ * @brief Return the index of current position in the segregated list
+ * 
+ * @param[in] size The size of the current block we are checking
+ * @return The index based on the size
+ */
 static size_t get_seg_index(size_t size) {
     size_t idx = 0;
     size >>= 5;
@@ -465,7 +472,12 @@ static size_t get_seg_index(size_t size) {
     return idx;
 }
 
-/**/
+/**
+ * @brief 
+ *
+ * @param[in]
+ * @return
+ */
 static size_t get_seg_size(size_t idx) {
     if (idx == 0)
         return min_block_size;
@@ -473,8 +485,8 @@ static size_t get_seg_size(size_t idx) {
 }
 
 /**
-  * @brief Insert a new node to a doubled linked list using LIFO
-  */
+ * @brief Insert a new node to a doubled linked list using LIFO
+ */
 static void add_node(block_t *block) {
 
     size_t size = get_size(block);
@@ -497,13 +509,16 @@ static void add_node(block_t *block) {
     return;
 }
 
+/**
+ * @brief Delete the new from the doubled linked list
+ */
 static void delete_node(block_t *block) {
     size_t idx = get_seg_index(get_size(block));
 
     /* Case 1: deleted node is not the first block */
-    if (block->prev != NULL) { 
+    if (block->prev != NULL) {
         block->prev->next = block->next;
-    } 
+    }
 
     else {
         if (block != NULL)
@@ -513,7 +528,7 @@ static void delete_node(block_t *block) {
     }
 
     /* deleted block is not the last node */
-    if (block->next != NULL) { 
+    if (block->next != NULL) {
         block->next->prev = block->prev;
     }
     block->next = NULL;
@@ -521,24 +536,24 @@ static void delete_node(block_t *block) {
 }
 
 /*
-* ---------------------------------------------------------------------------
-*                        END SHORT HELPER FUNCTIONS
-* ---------------------------------------------------------------------------
-*/
+ * ---------------------------------------------------------------------------
+ *                        END SHORT HELPER FUNCTIONS
+ * ---------------------------------------------------------------------------
+ */
 
 /******** The remaining content below are helper and debug routines ********/
 
 /**
-  * @brief
-  *
-  * <What does this function do?>
-  * <What are the function's arguments?>
-  * <What is the function's return value?>
-  * <Are there any preconditions or postconditions?>
-  *
-  * @param[in] block
-  * @return
-  */
+ * @brief
+ *
+ * <What does this function do?>
+ * <What are the function's arguments?>
+ * <What is the function's return value?>
+ * <Are there any preconditions or postconditions?>
+ *
+ * @param[in] block
+ * @return
+ */
 static block_t *coalesce_block(block_t *block) {
     dbg_requires(block != NULL);
     dbg_requires(in_heap(block));
@@ -600,18 +615,18 @@ static block_t *coalesce_block(block_t *block) {
 }
 
 /**
-  * @brief
-  *
-  * <What does this function do?>
-  * <What are the function's arguments?>
-  * <What is the function's return value?>
-  * <Are there any preconditions or postconditions?>
-  *
-  * @param[in] size
-  * @return
-  */
+ * @brief
+ *
+ * <What does this function do?>
+ * <What are the function's arguments?>
+ * <What is the function's return value?>
+ * <Are there any preconditions or postconditions?>
+ *
+ * @param[in] size
+ * @return
+ */
 static block_t *extend_heap(size_t size) {
-    void *bp; 
+    void *bp;
 
     // Allocate an even number of words to maintain alignment
     size = round_up(size, dsize);
@@ -634,16 +649,16 @@ static block_t *extend_heap(size_t size) {
 }
 
 /**
-  * @brief
-  *
-  * <What does this function do?>
-  * <What are the function's arguments?>
-  * <What is the function's return value?>
-  * <Are there any preconditions or postconditions?>
-  *
-  * @param[in] block
-  * @param[in] asize
-  */
+ * @brief
+ *
+ * <What does this function do?>
+ * <What are the function's arguments?>
+ * <What is the function's return value?>
+ * <Are there any preconditions or postconditions?>
+ *
+ * @param[in] block
+ * @param[in] asize
+ */
 static void split_block(block_t *block, size_t asize) {
     dbg_requires(get_alloc(block));
 
@@ -662,16 +677,16 @@ static void split_block(block_t *block, size_t asize) {
 }
 
 /**
-  * @brief First fit
-  *
-  * <What does this function do?>
-  * <What are the function's arguments?>
-  * <What is the function's return value?>
-  * <Are there any preconditions or postconditions?>
-  *
-  * @param[in] asize
-  * @return
-  */
+ * @brief First fit
+ *
+ * <What does this function do?>
+ * <What are the function's arguments?>
+ * <What is the function's return value?>
+ * <Are there any preconditions or postconditions?>
+ *
+ * @param[in] asize
+ * @return
+ */
 static block_t *find_fit(size_t asize) {
     size_t class_idx = get_seg_index(asize);
     dbg_assert(class_idx >= 0 && class_idx <= 14);
@@ -690,7 +705,7 @@ static block_t *find_fit(size_t asize) {
 }
 
 /**
-*/
+ */
 static bool is_acyclic(block_t *block) {
     block_t *h;
     block_t *t;
@@ -709,7 +724,7 @@ static bool is_acyclic(block_t *block) {
 }
 
 /**
-*/
+ */
 static bool is_aligned(const void *p) {
     size_t ip = (size_t)p;
 
@@ -743,8 +758,8 @@ static bool is_valid_block(block_t *block) {
 }
 
 /**
-* @brief Check validity of list segment
-*/
+ * @brief Check validity of list segment
+ */
 static bool is_segment(block_t *start, block_t *end, size_t size) {
     if (start == NULL || start == end)
         return true;
@@ -818,7 +833,7 @@ static bool in_heap(const void *p) {
  */
 static bool is_valid_heap_boundaries(int line) {
     block_t *base = (block_t *)mem_heap_lo();
-    block_t *top = (block_t *)((char *)mem_heap_hi() - 7); 
+    block_t *top = (block_t *)((char *)mem_heap_hi() - 7);
 
     /* Check prologue */
     if (!get_alloc(base) || get_size(base) != 0) {
@@ -842,16 +857,16 @@ static bool is_valid_heap_boundaries(int line) {
 }
 
 /**
-  * @brief
-  *
-  * <What does this function do?>
-  * <What are the function's arguments?>
-  * <What is the function's return value?>
-  * <Are there any preconditions or postconditions?>
-  *
-  * @param[in] line
-  * @return
-  */
+ * @brief
+ *
+ * <What does this function do?>
+ * <What are the function's arguments?>
+ * <What is the function's return value?>
+ * <Are there any preconditions or postconditions?>
+ *
+ * @param[in] line
+ * @return
+ */
 bool mm_checkheap(int line) {
     block_t *curr = heap_start;
     block_t *prev;
@@ -873,7 +888,7 @@ bool mm_checkheap(int line) {
         // Check block in heap bound
         if (!in_heap(curr)) {
             dbg_printf("Error: Block is not in heap boundaries at line %d\n",
-                    line);
+                       line);
             return false;
         }
 
@@ -891,15 +906,15 @@ bool mm_checkheap(int line) {
 }
 
 /**
-  * @brief
-  *
-  * <What does this function do?>
-  * <What are the function's arguments?>
-  * <What is the function's return value?>
-  * <Are there any preconditions or postconditions?>
-  *
-  * @return
-  */
+ * @brief
+ *
+ * <What does this function do?>
+ * <What are the function's arguments?>
+ * <What is the function's return value?>
+ * <Are there any preconditions or postconditions?>
+ *
+ * @return
+ */
 bool mm_init(void) {
     // Create the initial empty heap
     word_t *start = (word_t *)(mem_sbrk(2 * wsize));
@@ -925,16 +940,16 @@ bool mm_init(void) {
 }
 
 /**
-  * @brief
-  *
-  * <What does this function do?>
-  * <What are the function's arguments?>
-  * <What is the function's return value?>
-  * <Are there any preconditions or postconditions?>
-  *
-  * @param[in] size
-  * @return
-  */
+ * @brief
+ *
+ * <What does this function do?>
+ * <What are the function's arguments?>
+ * <What is the function's return value?>
+ * <Are there any preconditions or postconditions?>
+ *
+ * @param[in] size
+ * @return
+ */
 void *malloc(size_t size) {
     dbg_requires(mm_checkheap(__LINE__));
 
@@ -993,15 +1008,15 @@ void *malloc(size_t size) {
 }
 
 /**
-  * @brief
-  *
-  * <What does this function do?>
-  * <What are the function's arguments?>
-  * <What is the function's return value?>
-  * <Are there any preconditions or postconditions?>
-  *
-  * @param[in] bp
-  */
+ * @brief
+ *
+ * <What does this function do?>
+ * <What are the function's arguments?>
+ * <What is the function's return value?>
+ * <Are there any preconditions or postconditions?>
+ *
+ * @param[in] bp
+ */
 void free(void *bp) {
     dbg_requires(mm_checkheap(__LINE__));
 
@@ -1026,17 +1041,17 @@ void free(void *bp) {
 }
 
 /**
-  * @brief
-  *
-  * <What does this function do?>
-  * <What are the function's arguments?>
-  * <What is the function's return value?>
-  * <Are there any preconditions or postconditions?>
-  *
-  * @param[in] ptr
-  * @param[in] size
-  * @return
-  */
+ * @brief
+ *
+ * <What does this function do?>
+ * <What are the function's arguments?>
+ * <What is the function's return value?>
+ * <Are there any preconditions or postconditions?>
+ *
+ * @param[in] ptr
+ * @param[in] size
+ * @return
+ */
 void *realloc(void *ptr, size_t size) {
     block_t *block = payload_to_header(ptr);
     size_t copysize;
@@ -1075,17 +1090,17 @@ void *realloc(void *ptr, size_t size) {
 }
 
 /**
-  * @brief
-  *
-  * <What does this function do?>
-  * <What are the function's arguments?>
-  * <What is the function's return value?>
-  * <Are there any preconditions or postconditions?>
-  *
-  * @param[in] elements
-  * @param[in] size
-  * @return
-  */
+ * @brief
+ *
+ * <What does this function do?>
+ * <What are the function's arguments?>
+ * <What is the function's return value?>
+ * <Are there any preconditions or postconditions?>
+ *
+ * @param[in] elements
+ * @param[in] size
+ * @return
+ */
 void *calloc(size_t elements, size_t size) {
     void *bp;
     size_t asize = elements * size;
