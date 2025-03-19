@@ -5,6 +5,7 @@
  * 15-213: Introduction to Computer Systems
  *
  * TODO: insert your documentation here. :)
+ * Store extra information in the header -> Create helpers to extract information and fast check if needed
  *
  *************************************************************************
  *
