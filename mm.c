@@ -544,15 +544,11 @@ static void delete_node(block_t *block) {
 /******** The remaining content below are helper and debug routines ********/
 
 /**
- * @brief
- *
- * <What does this function do?>
- * <What are the function's arguments?>
- * <What is the function's return value?>
+ * @brief Coalesce the current block with the adjacent free block, if possible. This will help reduce fragmentation in the heap by making larger contiguous free blocks, and this benefits future allocations.
  * <Are there any preconditions or postconditions?>
  *
- * @param[in] block
- * @return
+ * @param[in] block A pointer to the current block to be coalesced
+ * @return A pointer to the coalesced block
  */
 static block_t *coalesce_block(block_t *block) {
     dbg_requires(block != NULL);
