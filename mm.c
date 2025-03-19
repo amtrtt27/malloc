@@ -829,8 +829,8 @@ static bool in_heap(const void *p) {
 /**
  */
 static bool is_valid_heap_boundaries(int line) {
-    block_t *base = (block_t *)mem_heap_lo();
-    block_t *top = (block_t *)((char *)mem_heap_hi() - 7);
+    block_t *base = (block_t *)mem_heap_lo(); /* Get the prologue */
+    block_t *top = (block_t *)((char *)mem_heap_hi() - sizeof(block_t) + 1); /* Get the epilogue*/
 
     /* Check prologue */
     if (!get_alloc(base) || get_size(base) != 0) {
@@ -861,6 +861,11 @@ static bool is_valid_heap_boundaries(int line) {
  * <What is the function's return value?>
  * <Are there any preconditions or postconditions?>
  *
+ * Check epilogue and prologue
+ * Check address alignment
+ * Check block in heap bounds
+ * Check block's header and footer and consistency
+ * Check coalescing
  * @param[in] line
  * @return
  */
