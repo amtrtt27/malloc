@@ -5,7 +5,8 @@
  * 15-213: Introduction to Computer Systems
  *
  * TODO: insert your documentation here. :)
- * Store extra information in the header -> Create helpers to extract information and fast check if needed
+ * Store extra information in the header -> Create helpers to extract
+ *information and fast check if needed
  *
  *************************************************************************
  *
@@ -437,7 +438,7 @@ static block_t *find_prev(block_t *block) {
 }
 
 /**
- * @brief 
+ * @brief
  */
 static bool extract_prev_alloc(word_t word) {
     return (bool)(word & 0x2);
@@ -459,7 +460,7 @@ static void init_seg_list() {
 
 /**
  * @brief Return the index of current position in the segregated list
- * 
+ *
  * @param[in] size The size of the current block we are checking
  * @return The index based on the size
  */
@@ -474,7 +475,7 @@ static size_t get_seg_index(size_t size) {
 }
 
 /**
- * @brief 
+ * @brief
  *
  * @param[in]
  * @return
@@ -545,8 +546,10 @@ static void delete_node(block_t *block) {
 /******** The remaining content below are helper and debug routines ********/
 
 /**
- * @brief Coalesce the current block with the adjacent free block, if possible. This will help reduce fragmentation in the heap by making larger contiguous free blocks, and this benefits future allocations.
- * <Are there any preconditions or postconditions?>
+ * @brief Coalesce the current block with the adjacent free block, if possible.
+ * This will help reduce fragmentation in the heap by making larger contiguous
+ * free blocks, and this benefits future allocations. <Are there any
+ * preconditions or postconditions?>
  *
  * @param[in] block A pointer to the current block to be coalesced
  * @return A pointer to the coalesced block
@@ -761,7 +764,7 @@ static bool is_segment(block_t *start, block_t *end, size_t size) {
     if (start == NULL || start == end)
         return true;
     if (!is_valid_block(start) || get_size(start) > size) {
-        dbg_printf("Error: segment error at line \n");
+        dbg_printf("Error: segment error\n");
         return false;
     }
 
@@ -813,7 +816,7 @@ static bool is_valid_segregated_list() {
         }
 
         if (!is_valid_list(seg_list[i], size)) {
-            dbg_printf("Error: invalid list error at line\n");
+            dbg_printf("Error: invalid list error\n");
             return false;
         }
     }
@@ -830,7 +833,8 @@ static bool in_heap(const void *p) {
  */
 static bool is_valid_heap_boundaries(int line) {
     block_t *base = (block_t *)mem_heap_lo(); /* Get the prologue */
-    block_t *top = (block_t *)((char *)mem_heap_hi() - sizeof(block_t) + 1); /* Get the epilogue*/
+    block_t *top = (block_t *)((char *)mem_heap_hi() - sizeof(block_t) +
+                               1); /* Get the epilogue*/
 
     /* Check heap starts */
     if ((char *)heap_start != (char *)(base) + 8) {
@@ -838,12 +842,38 @@ static bool is_valid_heap_boundaries(int line) {
         return false;
     }
 
-    /* Check epilogue */
-    if (get_size(top) == 0 && get_size(base) == 0 && get_alloc(top) && get_alloc(base)) return true;
+    /* Check epilogue prologue */
+    if (get_size(top) == 0 && get_size(base) == 0 && get_alloc(top) &&
+        get_alloc(base))
+        return true;
+
     else {
         dbg_printf("Error: epilogue and prologue: %d\n", line);
         return false;
     }
+
+    /* Check heap boundaries */
+    block_t* curr_block = heap_start;
+    while (curr_block <= (block_t)* mem_heap_hi() && get_size(curr_block) != 0) {
+        block_t* next_block = find_next(curr_block);
+        if (next_block > (block_t)* mem_heap_hi()) {
+            dbg_printf("Heap boundaries: %d\n", line);
+            return false;
+        }
+        curr_block = next_block;
+    }
+
+    /* Check block header footer */
+    block_t* curr_block = heap_start;
+    while (curr_block <= (block_t)* mem_heap_hi() && get_size(curr_block) != 0) {
+        word_t header = curr_block->header;
+        word_t footer = *(header_to_footer(curr_block));
+        if (header != footer) {
+            dbg_printf("Head and footer at line %d\n", line);
+            return false;
+        }
+    }
+    return true;
 }
 
 /**
@@ -879,23 +909,24 @@ bool mm_checkheap(int line) {
     }
 
     // Iterate through all blocks in the heap
-    while (get_size(curr) != 0) {
+    while (curr <= (block_t)* mem_heap_hi() && get_size(curr) != 0) {
         // Check block in heap bound
         if (!in_heap(curr)) {
             dbg_printf("Error: Block is not in heap boundaries at line %d\n",
                        line);
             return false;
         }
+        block_t* next = find_next(curr);
 
-        prev = curr;
-        curr = find_next(curr);
-
-        /* Check adjacent free blocks */
-        if (!get_alloc(prev) && !get_alloc(curr) && get_size(curr) != 0) {
-            dbg_printf("Error: free block err at line %d\n", line);
-            return false;
+        if (get_size(next) != 0) {
+            if (!get_alloc(curr) && !get_alloc(next)) {
+                dbg_printf("Coalescing error at line %d\n", line);
+                return false;
+            }
         }
+        curr = next;
     }
+    
     dbg_printf("Heap is consistent at line %d\n", line);
     return true;
 }
