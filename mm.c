@@ -770,12 +770,12 @@ static bool is_segment(block_t *start, block_t *end, size_t size) {
         return false;
     else {
         if (start->next != NULL && start->next->prev != start) {
-            dbg_printf("Error: next consistency error at line\n");
+            dbg_printf("Error: next consistency error\n");
             return false;
         }
 
         if (start->prev != NULL && start->prev->next != start) {
-            dbg_printf("Error: previous consistency error at line\n");
+            dbg_printf("Error: previous consistency error\n");
             return false;
         }
     }
@@ -788,12 +788,12 @@ static bool is_valid_list(block_t *block, size_t size) {
     if (block == NULL)
         return true;
     if (!is_segment(block, NULL, size)) {
-        dbg_printf("Error: invalid list 1 error at line\n");
+        dbg_printf("Error: invalid list error \n");
         return false;
     }
 
     if (!is_acyclic(block)) {
-        dbg_printf("Error: acyclic error at line\n");
+        dbg_printf("Error: acyclic error\n");
         return false;
     }
 
@@ -832,12 +832,6 @@ static bool is_valid_heap_boundaries(int line) {
     block_t *base = (block_t *)mem_heap_lo(); /* Get the prologue */
     block_t *top = (block_t *)((char *)mem_heap_hi() - sizeof(block_t) + 1); /* Get the epilogue*/
 
-    /* Check prologue */
-    if (!get_alloc(base) || get_size(base) != 0) {
-        dbg_printf("Error: prologue error at line %d\n", line);
-        return false;
-    }
-
     /* Check heap starts */
     if ((char *)heap_start != (char *)(base) + 8) {
         dbg_printf("Error: heap start error at line %d\n", line);
@@ -845,12 +839,11 @@ static bool is_valid_heap_boundaries(int line) {
     }
 
     /* Check epilogue */
-    if (!get_alloc(top) || get_size(top) != 0) {
-        dbg_printf("Error: epilogue error at line %d\n", line);
+    if (get_size(top) == 0 && get_size(base) == 0 && get_alloc(top) && get_alloc(base)) return true;
+    else {
+        dbg_printf("Error: epilogue and prologue: %d\n", line);
         return false;
     }
-
-    return true;
 }
 
 /**
