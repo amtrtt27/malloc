@@ -854,9 +854,9 @@ static bool is_valid_heap_boundaries(int line) {
 
     /* Check heap boundaries */
     block_t* curr_block = heap_start;
-    while (curr_block <= (block_t)* mem_heap_hi() && get_size(curr_block) != 0) {
+    while (curr_block <= (block_t*)mem_heap_hi() && get_size(curr_block) != 0) {
         block_t* next_block = find_next(curr_block);
-        if (next_block > (block_t)* mem_heap_hi()) {
+        if (next_block > (block_t*)mem_heap_hi()) {
             dbg_printf("Heap boundaries: %d\n", line);
             return false;
         }
@@ -864,8 +864,8 @@ static bool is_valid_heap_boundaries(int line) {
     }
 
     /* Check block header footer */
-    block_t* curr_block = heap_start;
-    while (curr_block <= (block_t)* mem_heap_hi() && get_size(curr_block) != 0) {
+    curr_block = heap_start;
+    while (curr_block <= (block_t*)mem_heap_hi() && get_size(curr_block) != 0) {
         word_t header = curr_block->header;
         word_t footer = *(header_to_footer(curr_block));
         if (header != footer) {
@@ -894,7 +894,6 @@ static bool is_valid_heap_boundaries(int line) {
  */
 bool mm_checkheap(int line) {
     block_t *curr = heap_start;
-    block_t *prev;
 
     /* Check validity on list level */
     if (!is_valid_segregated_list()) {
@@ -909,7 +908,7 @@ bool mm_checkheap(int line) {
     }
 
     // Iterate through all blocks in the heap
-    while (curr <= (block_t)* mem_heap_hi() && get_size(curr) != 0) {
+    while (curr <= (block_t*)mem_heap_hi() && get_size(curr) != 0) {
         // Check block in heap bound
         if (!in_heap(curr)) {
             dbg_printf("Error: Block is not in heap boundaries at line %d\n",
@@ -926,7 +925,7 @@ bool mm_checkheap(int line) {
         }
         curr = next;
     }
-    
+
     dbg_printf("Heap is consistent at line %d\n", line);
     return true;
 }
