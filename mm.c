@@ -118,7 +118,18 @@ static const size_t chunksize = (1 << 12);
 static const word_t alloc_mask = 0x1;
 
 /**
- * @brief Bit mask to isolate size of SOMETHINGGGGGGGGGG
+ * @brief Bit mask to isolate the allocation status of previous block
+ */
+static const word_t prev_alloc_mask = 0x2;
+
+/**
+ * @brief Bit mask to isolate the flag if the previous block is 
+ * minimum block size
+ */
+static const word_t prev_min_tag_mask = 0x4;
+
+/**
+ * @brief Bit mask to isolate size of block
  */
 static const word_t size_mask = ~(word_t)0xF;
 
@@ -137,7 +148,9 @@ struct block {
 };
 
 /* Global variables */
+/** @brief Array of 13 class sizes */
 static block_t *seg_list[SEG_LENGTH];
+
 /** @brief Pointer to first block in the heap */
 static block_t *heap_start = NULL;
 
@@ -233,11 +246,16 @@ static size_t round_up(size_t size, size_t n) {
  * @param[in] alloc True if the block is allocated
  * @return The packed value
  */
-static word_t pack(size_t size, bool alloc) {
+static word_t pack(size_t size, bool alloc, bool prev_alloc, bool prev_min_alloc) {
     word_t word = size;
     if (alloc) {
         word |= alloc_mask;
     }
+
+    if (prev_alloc) word |= prev_alloc_mask;
+    
+    if (prev_min_alloc) word |= prev_min_tag_mask;
+    
     return word;
 }
 
@@ -329,7 +347,11 @@ static block_t *footer_to_header(word_t *footer) {
  */
 static size_t get_payload_size(block_t *block) {
     size_t asize = get_size(block);
-    return asize - dsize;
+    size_t res = asize
+
+    if (get_alloc(block)) res -= wsize;
+    else res -= dsize;
+    return res;
 }
 
 /**
@@ -354,6 +376,19 @@ static bool get_alloc(block_t *block) {
 }
 
 /**
+ * @brief Returns allocation status of previous block based on size
+ * @return The allocation status of the previous block
+ */
+static bool get_prev_alloc(word_t header) return (header & prev_alloc_mask);
+
+
+/**
+ * @brief Returns min previous tag based on the size
+ * @return The allocation status of the previous block
+ */
+static bool get_prev_min_tag(word_t header) return (header & prev_min_tag_mask);
+
+/**
  * @brief Writes an epilogue header at the given address.
  *
  * The epilogue header has size 0, and is marked as allocated.
@@ -363,7 +398,7 @@ static bool get_alloc(block_t *block) {
 static void write_epilogue(block_t *block) {
     dbg_requires(block != NULL);
     dbg_requires((char *)block == (char *)mem_heap_hi() - 7);
-    block->header = pack(0, true);
+    block->header = pack(0, true, get_prev_alloc(block->header), get_prev_min_flag(block->header));
 }
 
 /**
@@ -381,10 +416,20 @@ static void write_epilogue(block_t *block) {
 static void write_block(block_t *block, size_t size, bool alloc) {
     dbg_requires(block != NULL);
     dbg_requires(size > 0);
-    block->header = pack(size, alloc);
 
-    word_t *footerp = header_to_footer(block);
-    *footerp = pack(size, alloc);
+
+    block->header = pack(size, alloc, get_prev_alloc(block->header), get_prev_min_tag(block->header));
+
+    /* Block if free, we need footer */
+    if (!alloc && get_size(block) > min_block_size) {
+        word_t *footerp = header_to_footer(block);
+        *footerp = pack(size, alloc, get_prev_alloc(block->header), get_prev_min_tag(block->header));
+    }
+
+    /* Update the flag of next block */
+    block_t* block_next = find_next(block);
+    block_next->header = pack(get_size(block_nextx), get_alloc(block_next), alloc, get_size(block) == min_block_size)
+    
 }
 
 /**
@@ -440,6 +485,10 @@ static block_t *find_prev(block_t *block) {
     dbg_requires(block != NULL);
     dbg_requires(get_size(block) != 0 ||
                  (bool)"Called find_prev on the first block in the heap");
+
+    /* BLock has min block size */
+    if (get_prev_min_flag(block->header)) return (block_t*)((char*)block - 16);
+    
     word_t *footerp = find_prev_footer(block);
     return footer_to_header(footerp);
 }
