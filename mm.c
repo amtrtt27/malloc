@@ -407,8 +407,12 @@ static void write_epilogue(block_t *block) {
  * This function writes both a header and footer, where the location of the
  * footer is computed in relation to the header.
  *
- * TODO: Are there any preconditions or postconditions?
+ * @pre block must not be NULL
+ * @pre size is greater than 0
  *
+ * @post block will have its header (and footer if necessary) updated
+ * @post if the block is free, its footer will be written correctly
+ * 
  * @param[out] block The location to begin writing the block header
  * @param[in] size The size of the new block
  * @param[in] alloc The allocation status of the new block
@@ -428,7 +432,7 @@ static void write_block(block_t *block, size_t size, bool alloc) {
 
     /* Update the flag of next block */
     block_t* block_next = find_next(block);
-    block_next->header = pack(get_size(block_nextx), get_alloc(block_next), alloc, get_size(block) == min_block_size)
+    block_next->header = pack(get_size(block_next), get_alloc(block_next), alloc, get_size(block) == min_block_size)
     
 }
 
@@ -494,10 +498,12 @@ static block_t *find_prev(block_t *block) {
 }
 
 /**
- * @brief
+ * @brief Returns the allocation status of the previous block based on size
+ * @param[in] size
+ * @return The allocation status of previous block
  */
 static bool extract_prev_alloc(word_t word) {
-    return (bool)(word & 0x2);
+    return (bool)(word & prev_alloc_mask);
 }
 
 /**/
