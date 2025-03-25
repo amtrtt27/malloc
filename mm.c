@@ -171,7 +171,7 @@ static void split_block(block_t *block, size_t asize);
 static size_t max(size_t x, size_t y);
 static size_t round_up(size_t size, size_t n);
 
-static word_t pack(size_t size, bool alloc);
+static word_t pack(size_t size, bool alloc, bool prev_alloc, bool prev_min_alloc);
 static size_t extract_size(word_t word);
 static size_t get_size(block_t *block);
 static size_t get_payload_size(block_t *block);
@@ -183,10 +183,11 @@ static block_t *footer_to_header(word_t *footer);
 static bool extract_alloc(word_t word);
 static bool get_alloc(block_t *block);
 static bool extract_prev_alloc(word_t word);
-static bool get_prev_alloc(block_t *block);
+static bool get_prev_alloc(word_t header);
+static bool get_prev_min_tag(word_t header);
 static void write_epilogue(block_t *block);
 static void write_block(block_t *block, size_t size, bool alloc);
-static void write_footer(block_t *block, size_t size, bool alloc);
+// static void write_footer(block_t *block, size_t size, bool alloc);
 static block_t *find_next(block_t *block);
 static word_t *find_prev_footer(block_t *block);
 static block_t *find_prev(block_t *block);
@@ -254,9 +255,9 @@ static word_t pack(size_t size, bool alloc, bool prev_alloc, bool prev_min_alloc
         word |= alloc_mask;
     }
 
-    if (prev_alloc) word |= prev_alloc_mask;
+    if (prev_alloc) {word |= prev_alloc_mask;}
     
-    if (prev_min_alloc) word |= prev_min_tag_mask;
+    if (prev_min_alloc) {word |= prev_min_tag_mask;}
     
     return word;
 }
@@ -349,7 +350,7 @@ static block_t *footer_to_header(word_t *footer) {
  */
 static size_t get_payload_size(block_t *block) {
     size_t asize = get_size(block);
-    size_t res = asize
+    size_t res = asize;
 
     if (get_alloc(block)) res -= wsize;
     else res -= dsize;
@@ -381,14 +382,18 @@ static bool get_alloc(block_t *block) {
  * @brief Returns allocation status of previous block based on size
  * @return The allocation status of the previous block
  */
-static bool get_prev_alloc(word_t header) return (header & prev_alloc_mask);
+static bool get_prev_alloc(word_t header) {
+    return (header & prev_alloc_mask);
+}
 
 
 /**
  * @brief Returns min previous tag based on the size
  * @return The allocation status of the previous block
  */
-static bool get_prev_min_flag(word_t header) return (header & prev_min_tag_mask);
+static bool get_prev_min_tag(word_t header) {
+    return (header & prev_min_tag_mask);
+}
 
 /**
  * @brief Writes an epilogue header at the given address.
@@ -400,7 +405,7 @@ static bool get_prev_min_flag(word_t header) return (header & prev_min_tag_mask)
 static void write_epilogue(block_t *block) {
     dbg_requires(block != NULL);
     dbg_requires((char *)block == (char *)mem_heap_hi() - 7);
-    block->header = pack(0, true, get_prev_alloc(block->header), get_prev_min_flag(block->header));
+    block->header = pack(0, true, get_prev_alloc(block->header), get_prev_min_tag(block->header));
 }
 
 /**
@@ -434,7 +439,7 @@ static void write_block(block_t *block, size_t size, bool alloc) {
 
     /* Update the flag of next block */
     block_t* block_next = find_next(block);
-    block_next->header = pack(get_size(block_next), get_alloc(block_next), alloc, get_size(block) == min_block_size)
+    block_next->header = pack(get_size(block_next), get_alloc(block_next), alloc, get_size(block) == min_block_size);
     
 }
 
@@ -442,10 +447,10 @@ static void write_block(block_t *block, size_t size, bool alloc) {
  * @brief Given a block, its size, and allocation status, write appropriate
  * value to the footer
  */
-static void write_footer(block_t *block, size_t size, bool alloc) {
-    word_t *footerp = header_to_footer(block);
-    *footerp = pack(size, alloc);
-}
+// static void write_footer(block_t *block, size_t size, bool alloc) {
+//     word_t *footerp = header_to_footer(block);
+//     *footerp = pack(size, alloc);
+// }
 
 /**
  * @brief Finds the next consecutive block on the heap.
@@ -493,7 +498,9 @@ static block_t *find_prev(block_t *block) {
                  (bool)"Called find_prev on the first block in the heap");
 
     /* BLock has min block size */
-    if (get_prev_min_flag(block->header)) return (block_t*)((char*)block - 16);
+    if (get_prev_min_tag(block->header)) {
+        return (block_t*)((char*)block - 16);
+    }
     
     word_t *footerp = find_prev_footer(block);
     return footer_to_header(footerp);
@@ -508,14 +515,14 @@ static bool extract_prev_alloc(word_t word) {
     return (bool)(word & prev_alloc_mask);
 }
 
-/**
- * @brief Returns the tag
- * @param[in] block
- * @return
- */
-static bool get_prev_alloc(block_t *block) {
-    return extract_prev_alloc(block->header);
-}
+// /**
+//  * @brief Returns the tag
+//  * @param[in] block
+//  * @return
+//  */
+// static bool get_prev_alloc(block_t *block) {
+//     return extract_prev_alloc(block->header);
+// }
 
 /**
  * @brief Initiliaze the segregated list
@@ -569,7 +576,7 @@ static void add_node(block_t *block) {
     size_t size = get_size(block);
     size_t idx = get_seg_index(size);
 
-    block_t* start = seg_list[idx]
+    block_t* start = seg_list[idx];
 
     /* Block of min block size */
     if ((int)idx == 0) {
@@ -616,7 +623,7 @@ static void delete_node(block_t *block) {
         return;
     }
     
-    if (block->prev != NULL) block->prev->next = block->netx;
+    if (block->prev != NULL) block->prev->next = block->next;
     else seg_list[idx] = block->next;
 
     /* deleted block is not the last node */
@@ -954,8 +961,8 @@ bool mm_init(void) {
         return false;
     }
 
-    start[0] = pack(0, true); // Heap prologue (block footer)
-    start[1] = pack(0, true); // Heap epilogue (block header)
+    start[0] = pack(0, true, false, false); // Heap prologue (block footer)
+    start[1] = pack(0, true, true, false); // Heap epilogue (block header)
 
     // Heap starts with first "block header", currently the epilogue
     heap_start = (block_t *)&(start[1]);
@@ -1027,7 +1034,6 @@ void *malloc(size_t size) {
     size_t block_size = get_size(block);
     write_block(block, block_size, true);
     delete_node(block);
-    // add_node(block);
 
     // Try to split the block if too large
     split_block(block, asize);
