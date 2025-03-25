@@ -170,6 +170,7 @@ static void split_block(block_t *block, size_t asize);
 
 static size_t max(size_t x, size_t y);
 static size_t round_up(size_t size, size_t n);
+
 static word_t pack(size_t size, bool alloc);
 static size_t extract_size(word_t word);
 static size_t get_size(block_t *block);
@@ -178,6 +179,7 @@ static block_t *payload_to_header(void *bp);
 static void *header_to_payload(block_t *block);
 static word_t *header_to_footer(block_t *block);
 static block_t *footer_to_header(word_t *footer);
+
 static bool extract_alloc(word_t word);
 static bool get_alloc(block_t *block);
 static bool extract_prev_alloc(word_t word);
@@ -386,7 +388,7 @@ static bool get_prev_alloc(word_t header) return (header & prev_alloc_mask);
  * @brief Returns min previous tag based on the size
  * @return The allocation status of the previous block
  */
-static bool get_prev_min_tag(word_t header) return (header & prev_min_tag_mask);
+static bool get_prev_min_flag(word_t header) return (header & prev_min_tag_mask);
 
 /**
  * @brief Writes an epilogue header at the given address.
@@ -506,7 +508,11 @@ static bool extract_prev_alloc(word_t word) {
     return (bool)(word & prev_alloc_mask);
 }
 
-/**/
+/**
+ * @brief Returns the tag
+ * @param[in] block
+ * @return
+ */
 static bool get_prev_alloc(block_t *block) {
     return extract_prev_alloc(block->header);
 }
@@ -527,7 +533,9 @@ static void init_seg_list() {
  * @return The index based on the size
  */
 static size_t get_seg_index(size_t size) {
-    size_t idx = 0;
+    if (size <= min_block_size) return 0;
+
+    size_t idx = 1;
     size >>= 5;
     while (size > 1 && idx < SEG_LENGTH - 1) {
         size >>= 1;
@@ -537,10 +545,10 @@ static size_t get_seg_index(size_t size) {
 }
 
 /**
- * @brief
+ * @brief Return the size of the block
  *
- * @param[in]
- * @return
+ * @param[in] idx The index in the segregated list
+ * @return The approximate size based on index
  */
 static size_t get_seg_size(size_t idx) {
     if (idx == 0)
@@ -549,48 +557,67 @@ static size_t get_seg_size(size_t idx) {
 }
 
 /**
- * @brief Insert a new node to a doubled linked list using LIFO
+ * @brief Insert a new block to the segregated free list using LIFO approach
+ *
+ * @pre block must not be NULL
+ * 
+ * @param[in] block A pointer to the current block added
  */
 static void add_node(block_t *block) {
     dbg_requires(block != NULL);
+
     size_t size = get_size(block);
     size_t idx = get_seg_index(size);
 
-    /* Case 1: free list is empty */
-    if (seg_list[idx] == NULL) {
+    block_t* start = seg_list[idx]
+
+    /* Block of min block size */
+    if ((int)idx == 0) {
+        block->next = start;
         seg_list[idx] = block;
-        block->prev = NULL;
-        block->next = NULL;
+        return;
     }
 
-    /* Case 2: free list is non-empty */
-    else {
-        block->prev = NULL;
-        block->next = seg_list[idx];
-        seg_list[idx]->prev = block;
-        seg_list[idx] = block;
+    if (block != start) block->next = start;
+    
+    block->prev = NULL;
+
+    if (start != NULL && block != start) {
+        start->prev = block;
     }
-    return;
+
+    seg_list[idx] = block;
 }
 
 /**
- * @brief Delete the new from the doubled linked list
+ * @brief Delete the new from the segregated free list
  */
 static void delete_node(block_t *block) {
     dbg_requires(block != NULL);
-    size_t idx = get_seg_index(get_size(block));
+    int idx = (int) get_seg_index(get_size(block));
 
-    /* Case 1: deleted node is not the first block */
-    if (block->prev != NULL) {
-        block->prev->next = block->next;
-    }
+    dbg_assert(idx >= 0 && idx <= 14);
 
-    else {
-        if (block != NULL)
-            seg_list[idx] = block->next;
-        else
-            seg_list[idx] = NULL;
+    if (idx == 0) {
+        block_t* curr = seg_list[idx];
+
+        if (curr == block) {
+            seg_list[idx] = curr->next;
+            return;
+        }
+
+        while (curr != NULL) {
+            if (curr->next == block) {
+                curr->next = block->next;
+                break;
+            }
+            curr = curr->next;
+        }
+        return;
     }
+    
+    if (block->prev != NULL) block->prev->next = block->netx;
+    else seg_list[idx] = block->next;
 
     /* deleted block is not the last node */
     if (block->next != NULL) {
@@ -621,18 +648,24 @@ static block_t *coalesce_block(block_t *block) {
     dbg_requires(block != NULL);
     dbg_requires(in_heap(block));
 
-    block_t *block_prev = find_prev(block);
+    block_t *block_prev = NULL;
     block_t *block_next = find_next(block);
 
-    dbg_assert(block_prev != NULL);
     dbg_assert(block_next != NULL);
 
     size_t newSize = get_size(block);
-    size_t block_prev_size = get_size(block_prev);
+    size_t block_prev_size = 0;
     size_t block_next_size = get_size(block_next);
 
-    bool block_prev_alloc = get_alloc(block_prev);
+    bool block_prev_alloc = get_prev_alloc(block->header);
     bool block_next_alloc = get_alloc(block_next);
+
+    /* Free block has footer -> easily get previous's block information */
+    if (!block_prev_alloc) {
+        block_prev = find_prev(block);
+        block_prev_size = get_size(block_prev);
+        dbg_assert(block_prev != NULL);
+    }
 
     /* Case 1: prev alloc and next alloc */
     if (block_prev_alloc && block_next_alloc) {
@@ -649,7 +682,7 @@ static block_t *coalesce_block(block_t *block) {
         dbg_assert(in_heap(block));
         write_block(block, newSize, false);
         dbg_assert(in_heap(block));
-        add_node(block);
+        add_node(block); 
         return block;
     }
     /* Case 3: prev free but next alloc */
@@ -721,6 +754,7 @@ static block_t *extend_heap(size_t size) {
  */
 static void split_block(block_t *block, size_t asize) {
     dbg_requires(get_alloc(block));
+    dbg_requires(get_size(block) > asize);
 
     size_t block_size = get_size(block);
 
@@ -732,6 +766,7 @@ static void split_block(block_t *block, size_t asize) {
         write_block(block_next, block_size - asize, false);
         add_node(block_next);
     }
+    else write_block(block, block_size, true);
 
     dbg_ensures(get_alloc(block));
 }
