@@ -92,7 +92,6 @@
 
 /* Basic constants */
 #define SEG_LENGTH 15
-#define UINT_MAX ((size_t)-1)
 typedef uint64_t word_t;
 
 /** @brief Word and header size (bytes) */
@@ -135,16 +134,16 @@ static const word_t size_mask = ~(word_t)0xF;
 /** @brief Represents the header and payload of one block in the heap */
 typedef struct block block_t;
 
-struct block {
-    word_t header; /* Header contains size + allocation flag */
-    union {
+typedef struct block {
+    word_t header;
+    union payload_info {
         struct {
-            block_t *prev;
-            block_t *next;
-        };
-        char payload[0]; /* A pointer to the block payload */
-    };
-};
+            struct block *next;
+            struct block *prev;
+        } linkList;
+        char data[0];
+    } payLoad;
+} block_t;
 
 /* Global variables */
 /** @brief Array of 13 class sizes */
@@ -192,7 +191,6 @@ static block_t *find_prev(block_t *block);
 static void add_node(block_t *block);
 static void delete_node(block_t *block);
 static size_t get_seg_index(size_t size);
-static size_t get_seg_size(size_t size);
 
 /*
 *****************************************************************************
@@ -288,7 +286,7 @@ static size_t get_size(block_t *block) {
  * @return The corresponding block
  */
 static block_t *payload_to_header(void *bp) {
-    return (block_t *)((char *)bp - offsetof(block_t, payload));
+    return (block_t *)((char *)bp - offsetof(block_t, payLoad));
 }
 
 /**
@@ -300,21 +298,21 @@ static block_t *payload_to_header(void *bp) {
  */
 static void *header_to_payload(block_t *block) {
     dbg_requires(get_size(block) != 0);
-    return (void *)(block->payload);
+    return (void *)(block->payLoad.data);    
 }
 
 /**
  * @brief Given a block pointer, returns a pointer to the corresponding
  *        footer.
- * @param[in] block
+ * @param[in] block   
  * @return A pointer to the block's footer
  * @pre The block must be a valid block, not a boundary tag.
  */
 static word_t *header_to_footer(block_t *block) {
     dbg_requires(get_size(block) != 0 &&
                  "Called header_to_footer on the epilogue block");
-    return (word_t *)(block->payload + get_size(block) - dsize);
-}
+    return (word_t *)(block->payLoad.data + get_size(block) - dsize);
+}                        
 
 /**
  * @brief Given a block footer, returns a pointer to the corresponding
@@ -374,15 +372,6 @@ static bool extract_alloc(word_t word) {
 static bool get_alloc(block_t *block) {
     return extract_alloc(block->header);
 }
-
-// /**
-//  * @brief Returns allocation status of previous block based on size
-//  * @return The allocation status of the previous block
-//  */
-// static bool get_prev_alloc(word_t header) {
-//     return (header & prev_alloc_mask);
-// }
-
 
 /**
  * @brief Returns min previous tag based on the size
@@ -539,17 +528,6 @@ static size_t get_seg_index(size_t size) {
     return idx;
 }
 
-/**
- * @brief Return the size of the block
- *
- * @param[in] idx The index in the segregated list
- * @return The approximate size based on index
- */
-static size_t get_seg_size(size_t idx) {
-    if (idx == 0)
-        return min_block_size;
-    return 1 << (idx + 5);
-}
 
 /**
  * @brief Insert a new block to the segregated free list using LIFO approach
@@ -568,17 +546,17 @@ static void add_node(block_t *block) {
 
     /* Block of min block size */
     if ((int)idx == 0) {
-        block->next = start;
+        block->payLoad.linkList.next = start;
         seg_list[idx] = block;
         return;
     }
 
-    if (block != start) block->next = start;
+    if (block != start) block->payLoad.linkList.next = start;
     
-    block->prev = NULL;
+    block->payLoad.linkList.prev = NULL;
 
     if (start != NULL && block != start) {
-        start->prev = block;
+        start->payLoad.linkList.prev = block;
     }
 
     seg_list[idx] = block;
@@ -589,7 +567,7 @@ static void add_node(block_t *block) {
  */
 static void delete_node(block_t *block) {
     dbg_requires(block != NULL);
-    int idx = (int) get_seg_index(get_size(block));
+    int idx = (int)get_seg_index(get_size(block));
 
     dbg_assert(idx >= 0 && idx <= 14);
 
@@ -597,29 +575,32 @@ static void delete_node(block_t *block) {
         block_t* curr = seg_list[idx];
 
         if (curr == block) {
-            seg_list[idx] = curr->next;
+            seg_list[idx] = curr->payLoad.linkList.next;
             return;
         }
 
         while (curr != NULL) {
-            if (curr->next == block) {
-                curr->next = block->next;
+            if (curr->payLoad.linkList.next == block) {
+                curr->payLoad.linkList.next = block->payLoad.linkList.next;
                 break;
             }
-            curr = curr->next;
+            curr = curr->payLoad.linkList.next;
         }
         return;
     }
     
-    if (block->prev) {block->prev->next = block->next;}
-    else {seg_list[idx] = block->next;}
+    if (block->payLoad.linkList.prev) {
+        block->payLoad.linkList.prev->payLoad.linkList.next =
+        block->payLoad.linkList.next;
+    }
+    else {seg_list[idx] = block->payLoad.linkList.next;}
 
     /* deleted block is not the last node */
-    if (block->next) {
-        block->next->prev = block->prev;
+    if (block->payLoad.linkList.next) {
+        block->payLoad.linkList.next->payLoad.linkList.prev = block->payLoad.linkList.prev;
     }
-    block->next = NULL;
-    block->prev = NULL;
+    block->payLoad.linkList.next = NULL;
+    block->payLoad.linkList.prev = NULL;
 }
 
 /*
@@ -783,11 +764,11 @@ static block_t *find_fit(size_t asize) {
     block_t *block;
     block_t *start;
 
-    /* First- fit*/
+    /* First-fit*/
     if (class_idx >= 0 && class_idx <= 4) {
         for (int i = class_idx; i < 5; i++) {
             start = seg_list[i];
-            for (block = start; block != NULL; block = block->next) {
+            for (block = start; block != NULL; block = block->payLoad.linkList.next) {
                 if (asize <= get_size(block)) {
                     return block;
                 }
@@ -803,7 +784,7 @@ static block_t *find_fit(size_t asize) {
         start = seg_list[i];
         int tries = 0;
 
-        for (block = start; block != NULL; block = block->next) {
+        for (block = start; block != NULL; block = block->payLoad.linkList.next) {
             size_t block_size = get_size(block);
 
             if (asize == block_size) {
@@ -841,11 +822,11 @@ static block_t *find_fit(size_t asize) {
  */
 static bool is_valid_segregated_list(int line) {
     for (int i = 0; i < SEG_LENGTH; i++) {
-        for (block_t *curr = seg_list[i]; curr != NULL; curr = curr->next) {
-            block_t *next = curr->next;
+        for (block_t *curr = seg_list[i]; curr != NULL; curr = curr->payLoad.linkList.next) {
+            block_t *next = curr->payLoad.linkList.next;
 
             /* Check pointer consistency */
-            if (next != NULL && next->prev != curr) {
+            if (next != NULL && next->payLoad.linkList.prev != curr) {
                 dbg_printf("Error on pointer consistency at line %d\n", line);
                 return false;
             }
