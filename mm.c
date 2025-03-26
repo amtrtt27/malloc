@@ -93,7 +93,6 @@
 /* Basic constants */
 #define SEG_LENGTH 15
 #define UINT_MAX ((size_t)-1)
-#define ALIGNMENT 16
 typedef uint64_t word_t;
 
 /** @brief Word and header size (bytes) */
@@ -182,12 +181,10 @@ static block_t *footer_to_header(word_t *footer);
 
 static bool extract_alloc(word_t word);
 static bool get_alloc(block_t *block);
-static bool extract_prev_alloc(word_t word);
 static bool get_prev_alloc(word_t header);
 static bool get_prev_min_tag(word_t header);
 static void write_epilogue(block_t *block);
 static void write_block(block_t *block, size_t size, bool alloc);
-// static void write_footer(block_t *block, size_t size, bool alloc);
 static block_t *find_next(block_t *block);
 static word_t *find_prev_footer(block_t *block);
 static block_t *find_prev(block_t *block);
@@ -378,13 +375,13 @@ static bool get_alloc(block_t *block) {
     return extract_alloc(block->header);
 }
 
-/**
- * @brief Returns allocation status of previous block based on size
- * @return The allocation status of the previous block
- */
-static bool get_prev_alloc(word_t header) {
-    return (header & prev_alloc_mask);
-}
+// /**
+//  * @brief Returns allocation status of previous block based on size
+//  * @return The allocation status of the previous block
+//  */
+// static bool get_prev_alloc(word_t header) {
+//     return (header & prev_alloc_mask);
+// }
 
 
 /**
@@ -442,15 +439,6 @@ static void write_block(block_t *block, size_t size, bool alloc) {
     block_next->header = pack(get_size(block_next), get_alloc(block_next), alloc, get_size(block) == min_block_size);
     
 }
-
-/**
- * @brief Given a block, its size, and allocation status, write appropriate
- * value to the footer
- */
-// static void write_footer(block_t *block, size_t size, bool alloc) {
-//     word_t *footerp = header_to_footer(block);
-//     *footerp = pack(size, alloc);
-// }
 
 /**
  * @brief Finds the next consecutive block on the heap.
@@ -511,18 +499,9 @@ static block_t *find_prev(block_t *block) {
  * @param[in] size
  * @return The allocation status of previous block
  */
-static bool extract_prev_alloc(word_t word) {
-    return (bool)(word & prev_alloc_mask);
+static bool get_prev_alloc(word_t header) {
+    return (header & prev_alloc_mask);
 }
-
-// /**
-//  * @brief Returns the tag
-//  * @param[in] block
-//  * @return
-//  */
-// static bool get_prev_alloc(block_t *block) {
-//     return extract_prev_alloc(block->header);
-// }
 
 /**
  * @brief Initiliaze the segregated list
@@ -540,10 +519,19 @@ static void init_seg_list() {
  * @return The index based on the size
  */
 static size_t get_seg_index(size_t size) {
-    if (size <= min_block_size) return 0;
+    size_t sizes[] = {min_block_size, 32, 48, 64, 80, 96, 112, 128};
 
-    size_t idx = 1;
+    size_t num = sizeof(sizes) / sizeof(sizes[0]);
+
+    for (size_t i = 0; i < num; i++) {
+        if (size == sizes[i]) {
+            return i;
+        }
+    }
+
+    size_t idx = num;
     size >>= 5;
+    
     while (size > 1 && idx < SEG_LENGTH - 1) {
         size >>= 1;
         idx++;
@@ -623,11 +611,11 @@ static void delete_node(block_t *block) {
         return;
     }
     
-    if (block->prev != NULL) block->prev->next = block->next;
-    else seg_list[idx] = block->next;
+    if (block->prev) {block->prev->next = block->next;}
+    else {seg_list[idx] = block->next;}
 
     /* deleted block is not the last node */
-    if (block->next != NULL) {
+    if (block->next) {
         block->next->prev = block->prev;
     }
     block->next = NULL;
@@ -773,7 +761,7 @@ static void split_block(block_t *block, size_t asize) {
         write_block(block_next, block_size - asize, false);
         add_node(block_next);
     }
-    else write_block(block, block_size, true);
+    else {write_block(block, block_size, true);}
 
     dbg_ensures(get_alloc(block));
 }
@@ -790,17 +778,59 @@ static void split_block(block_t *block, size_t asize) {
  * @return
  */
 static block_t *find_fit(size_t asize) {
-    size_t class_idx = get_seg_index(asize);
+    int class_idx = (int)get_seg_index(asize);
     dbg_assert(class_idx >= 0 && class_idx <= 14);
+    block_t *block;
+    block_t *start;
 
-    for (size_t i = class_idx; i < SEG_LENGTH; i++) {
-        block_t *ll_start = seg_list[i];
-        block_t *block;
-        for (block = ll_start; block != NULL; block = block->next) {
-            if (asize <= get_size(block)) {
-                return block;
+    /* First- fit*/
+    if (class_idx >= 0 && class_idx <= 4) {
+        for (int i = class_idx; i < 5; i++) {
+            start = seg_list[i];
+            for (block = start; block != NULL; block = block->next) {
+                if (asize <= get_size(block)) {
+                    return block;
+                }
             }
         }
+    }
+
+    block_t *good_block = NULL;
+    size_t good_size = SIZE_MAX;
+    int MAX_TRIES = 5;
+
+    for (int i = class_idx; i < SEG_LENGTH; i++) {
+        start = seg_list[i];
+        int tries = 0;
+
+        for (block = start; block != NULL; block = block->next) {
+            size_t block_size = get_size(block);
+
+            if (asize == block_size) {
+                good_block = block;
+                good_size = block_size;
+                break;
+            }
+            else if (asize < block_size) {
+                if (good_block == NULL) {
+                    good_block = block;
+                    good_size = block_size;
+                    ++tries;
+                }
+                else {
+                    if (tries < MAX_TRIES) {
+                        if (block_size < good_size) {
+                            good_block = block;
+                            good_size = block_size;
+                            ++tries;
+                        }
+                    }
+                    else break;
+                }
+            }
+            
+        }
+        if (good_block != NULL) return good_block;
     }
 
     return NULL; // no fit found
@@ -1069,7 +1099,6 @@ void free(void *bp) {
 
     // Mark the block as free
     write_block(block, size, false);
-    // write_footer(block, size, false);
 
     // Try to coalesce the block with its neighbors
     coalesce_block(block);
