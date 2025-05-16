@@ -1,6 +1,5 @@
 #############################
 # CS:APP Malloc Lab
-# Handout files for students
 #############################
 
 ***********
@@ -8,13 +7,11 @@ Main Files:
 ***********
 
 mdriver, mdriver-emulate
-        Once you've run make, run ./mdriver to test
-        your solution.  Run ./mdriver-emulate to make sure your
-        solution can handle 64-bit allocations
+        Once you've run make, run ./mdriver to test.  Run ./mdriver-emulate to make sure your malloc can handle 64-bit allocations
 
 traces/
         Directory that contains the trace files that the driver uses
-        to test your solution. Files with names of the form XXX-short.rep
+        to test your malloc. Files with names of the form XXX-short.rep
         contain very short traces that you can use for debugging.
 
 **********************************
