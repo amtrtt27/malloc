@@ -2,7 +2,6 @@
  * @file mm.c
  * @brief A 64-bit struct-based implicit free list memory allocator
  *
- * 15-213: Introduction to Computer Systems
  *
  * INTRODUCTION
  * This lab implements a memory allocator using implicit free list with 
@@ -13,18 +12,9 @@
  * DESIGN CHOICE
  * 
  * Store extra information in the header -> Create helpers to extract
- *information and fast check if needed
+ * information and fast check if needed
  *
  *************************************************************************
- *
- * ADVICE FOR STUDENTS.
- * - Step 0: Please read the writeup!
- * - Step 1: Write your heap checker.
- * - Step 2: Write contracts / debugging assert statements.
- * - Good luck, and have fun!
- *
- *************************************************************************
- *
  * @author Tram Tran <tntran@andrew.cmu.edu>
  */
 
